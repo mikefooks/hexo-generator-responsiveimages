@@ -1,0 +1,12 @@
+{
+  "name": "hexo-generator-responsiveimages",
+  "author": "Mike Fooks <mikefooks@gmail.com>",
+  "version": "0.0.1",
+  "main": "index",
+  "description": "Responsive image generator for Hexo.",
+  "dependencies": {
+    "gm": "~1.16.0",
+    "async": "~0.9.0"
+  },
+  "devDependencies": {}
+}
