@@ -18,23 +18,22 @@ hexo.extend.generator.register("images", function (locals, render, callback) {
         baseDir = hexo.base_dir,
         tmpFolder = path.join(baseDir, "imgTmp"),
 
-        imageProperties = assets.map(function (asset) {
+        imageProperties = assets.filter(function (asset) {
+            return imageTest.test(asset._id);
+        }).map(function (asset) {
             var source = path.join(baseDir, asset._id),
                 fileName = path.basename(source),
-                destDir = path.dirname(asset.path),
-                isImg = imageTest.test(fileName);
+                destDir = path.dirname(asset.path);
 
             return {
                 source: source,
+                modified: asset.modified,
                 fileName: fileName,
                 destDir: destDir,
-                isImg: isImg,
                 getResizedName: function (size) {
                     return generateFileName(fileName, size);
                 }
             };
-        }).filter(function (properties) {
-            return properties.isImg;
         });
 
     // Create a temporary folder for our newly created images.
@@ -46,26 +45,53 @@ hexo.extend.generator.register("images", function (locals, render, callback) {
         }
     });
 
-    async.eachSeries(imageProperties, function (image, callback) {
-        async.series([
-            function (callback) {
-                async.each(sizeKeys, function (size, callback) {
-                    var imageName = image.getResizedName(size);
+    async.waterfall([
+        function (callback) {
+            var resizedPaths = imageProperties.map(function (image) {
+                var tmpPaths = {},
+                    destPaths = {};
+                
+                sizeKeys.forEach(function (size) {
+                    var resizedName =  image.getResizedName(size),
+                        tmpPath = path.join(tmpFolder, resizedName),
+                        destPath = path.join(image.destDir, resizedName);
 
+                    tmpPaths[size] = tmpPath;
+                    destPaths[size] = destPath;
+                });
+                
+                return {
+                    source: image.source,
+                    dest: destPaths,
+                    tmp: tmpPaths
+                };
+            });
+
+            callback(null, resizedPaths);
+        }, function (paths, callback) {
+            async.eachSeries(paths, function (image, callback) {
+                async.each(sizeKeys, function (size, callback) {
                     gm(image.source)
                         .thumb(
                             imageSizes[size],
                             imageSizes[size],
-                            path.join(tmpFolder, imageName),
+                            image.tmp[size],
                             60,
                             callback
                         );
                 }, callback);
-            }
-        ], function (err) {
-            if (err) { return callback(err); }
-        });
+            }, function () {
+                callback(null, paths);
+            });
+        }
+    ], function (err, paths) {
+        async.eachSeries(paths, function (image, callback) {
+            async.each(sizeKeys, function (size, callback) {
+                hexo.route.set(image.dest[size], function (callback) {
+                    callback(null, fs.createReadStream(image.tmp[size]));
+                });
+                callback();
+            }, callback);
+        }, callback);
     });
-
-    callback();
 });

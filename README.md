@@ -1,6 +1,6 @@
 #hexo-generator-responsiveimages
 
-First, install (http://www.graphicsmagick.org)[GraphicksMagick].
+First, you'll need [GraphicsMagick](http://www.graphicsmagick.org).
 
 you can set the sizes of your responsive images manually in _config.yml - something like:
 
