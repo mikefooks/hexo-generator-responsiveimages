@@ -50,28 +50,37 @@ hexo.extend.generator.register("images", function (locals, render, next) {
             };  
         })();
 
-        async.each(sizeKeys, function (size, callback) {
-            gm(image.source)
-                .thumb(
-                    imageSizes[size],
-                    imageSizes[size],
-                    image.tmp[size],
-                    60,
-                    function (err) {
-                        if (err) { return callback(err); }
+        async.waterfall([
+            function (callback) {
+                gm(image.source).size(function (err, dimensions) {
+                    if (err) { return callback(err); }
+                    var aspectRatio = dimensions.width / dimensions.height;
 
-                        var rs = fs.createReadStream(image.tmp[size]);
-                        hexo.route.set(image.dest[size], function (fn) {
-                            fn(null, rs);
-                        });
+                    callback(null, aspectRatio);
+                });
+            },
+            function (aspectRatio, callback) {
+                async.each(sizeKeys, function (size, callback) {
+                    gm(image.source).thumb(
+                        imageSizes[size],
+                        Math.floor(imageSizes[size] / aspectRatio),
+                        image.tmp[size],
+                        60,
+                        callback
+                    );
+                }, callback);
+            },
+            function (callback) {
+                sizeKeys.forEach(function (size) {
+                    var rs = fs.createReadStream(image.tmp[size]);
+                    hexo.route.set(image.dest[size], function (fn) {
+                        fn(null, rs);
+                    });         
+                });
 
-                        callback(); 
-                    }
-                );
-        }, callback);
+                callback();
+            }
+        ], callback);
 
-    }, function (err) {
-        if (err) { return next(err); }
-        next();
-    });
+    }, next);
 });
