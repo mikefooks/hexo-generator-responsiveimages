@@ -22,72 +22,56 @@ hexo.on("generateAfter", function () {
 });
 
 hexo.extend.generator.register("images", function (locals, render, next) {
-    var assets = hexo.model("Asset");
-
-    // Filter out any asset that isn't an image...
-    var imagePaths = assets.filter(function (asset) {
+    var assets = hexo.model("Asset").toArray().filter(function (asset) {
         return imageTest.test(asset._id);
-    // ... and build a collection of all the new filenames for
-    // both the temporary and final destinations of the resized
-    // images.
-    }).map(function (asset) {
-        var tmpPaths = {},
-            destPaths = {},
-            source = path.join(baseDir, asset._id),
-            fileName = path.basename(source),
-            destDir = path.dirname(asset.path);
-
-        sizeKeys.forEach(function (size) {
-            var resizedName = generateFileName(fileName, size);
-
-            tmpPaths[size] = path.join(tmpFolder, resizedName);
-            destPaths[size] = path.join(destDir, resizedName);
-        });
-
-        return {
-            source: source,
-            dest: destPaths,
-            tmp: tmpPaths
-        };
     });
 
-    async.series([
+    fs.mkdirSync(tmpFolder);
 
-        // Create a temporary folder for our new images.
-        function (callback) {
-            fs.mkdir(tmpFolder, callback);
-        },
+    async.eachSeries(assets, function (asset, callback) {
+        var image = (function () {
+            var tmpPaths = {},
+                destPaths = {},
+                source = path.join(baseDir, asset._id),
+                fileName = path.basename(source),
+                destDir = path.dirname(asset.path);
 
-        // Generate the new resized images and put them in the
-        // temporary directory.
-        function (callback) {
-            async.eachSeries(imagePaths, function (image, callback) {
-                async.each(sizeKeys, function (size, callback) {
-                    gm(image.source)
-                        .thumb(
-                            imageSizes[size],
-                            imageSizes[size],
-                            image.tmp[size],
-                            60,
-                            callback
-                        );
-                }, callback);
-            }, callback);
-        },
+            sizeKeys.forEach(function (size) {
+                var resizedName = generateFileName(fileName, size);
 
-        // Set the appropriate Hexo route for each image and size.
-        function (callback) {
-            async.eachSeries(imagePaths, function (image, callback) {
-                async.each(sizeKeys, function (size, callback) {
-                    var rs = fs.createReadStream(image.tmp[size]);
-                    hexo.route.set(image.dest[size], function (fn) {
-                        fn(null, rs);
-                    });
-                    callback();
-                }, callback);
-            }, callback);
-        }
-    ], function (err) {
+                tmpPaths[size] = path.join(tmpFolder, resizedName);
+                destPaths[size] = path.join(destDir, resizedName);
+            });
+
+            return {
+                source: source,
+                dest: destPaths,
+                tmp: tmpPaths
+            };  
+        })();
+
+        async.each(sizeKeys, function (size, callback) {
+            gm(image.source)
+                .thumb(
+                    imageSizes[size],
+                    imageSizes[size],
+                    image.tmp[size],
+                    60,
+                    function (err) {
+                        if (err) { return callback(err); }
+
+                        var rs = fs.createReadStream(image.tmp[size]);
+                        hexo.route.set(image.dest[size], function (fn) {
+                            fn(null, rs);
+                        });
+
+                        callback(); 
+                    }
+                );
+        }, callback);
+
+    }, function (err) {
+        if (err) { return next(err); }
         next();
     });
 });
