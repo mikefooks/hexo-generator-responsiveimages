@@ -9,7 +9,7 @@ var imageSizes = hexo.config["responsive_image_sizes"],
     imageTest = new RegExp(/(\.jpg|\.png|\.gif)$/);
 
 var baseDir = hexo.base_dir,
-    tmpFolder = path.join(baseDir, "imgTmp");
+    tmpFolder = path.join("/tmp", "hexo-images");
 
 // Takes the original image filename and turns it into originalFileName_size.jpg.
 function generateFileName(fileName, size) {
@@ -23,7 +23,11 @@ hexo.on("generateAfter", function () {
 
 hexo.extend.generator.register("images", function (locals, render, next) {
     var assets = hexo.model("Asset").toArray().filter(function (asset) {
-        return imageTest.test(asset._id);
+        console.log(asset);
+
+        return imageTest.test(asset._id) && 
+            asset.hasOwnProperty("post_id") &&
+            asset.modified;
     });
 
     fs.mkdirSync(tmpFolder);
@@ -65,7 +69,7 @@ hexo.extend.generator.register("images", function (locals, render, next) {
                         imageSizes[size],
                         Math.floor(imageSizes[size] / aspectRatio),
                         image.tmp[size],
-                        60,
+                        40,
                         callback
                     );
                 }, callback);
