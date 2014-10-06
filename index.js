@@ -4,15 +4,20 @@ var fs = require("fs"),
     gm = require("gm"),
     rimraf = require("rimraf");
 
-var imageSizes = hexo.config["responsive_image_sizes"],
+var htmlTag = hexo.util.html_tag,
+    imageSizes = hexo.config['responsive_images'].sizes,
     sizeKeys = Object.keys(imageSizes),
     imageTest = new RegExp(/(\.jpg|\.png|\.gif)$/);
 
 var baseDir = hexo.base_dir,
     tmpFolder = path.join("/tmp", "hexo-images");
 
-// Takes the original image filename and turns it into originalFileName_size.jpg.
-function generateFileName(fileName, size) {
+
+/**
+ * Takes the original image filename and turns it into 
+ * originalFileName_size.jpg.
+ */
+function createPath(fileName, size) {
     return fileName.replace(imageTest, "_" + size + "$1");
 }
 
@@ -21,9 +26,34 @@ hexo.on("generateAfter", function () {
     rimraf.sync(tmpFolder);
 });
 
+
+/**
+ * A tag for conveniently generating the picture, source and image
+ * elements in markdown.
+ */
+hexo.extend.tag.register("resp_img", function (args, content) {
+
+    var config = hexo.config["responsive_images"];
+        defaultImg = htmlTag("img", { srcset: createPath(args[0], config.default) }),
+        sources = "";
+
+    Object.keys(config.breakpoints).forEach(function (size) {
+        sources += htmlTag("source", {
+            srcset: createPath(args[0], size),
+            media: "(min-width: " + config.breakpoints[size] + "px)"
+        });
+    });
+
+    return htmlTag("picture", {}, sources + defaultImg);
+});
+
+
+/**
+ * the generator which creates the resized images from 
+ * the source file.
+ */
 hexo.extend.generator.register("images", function (locals, render, next) {
     var assets = hexo.model("Asset").toArray().filter(function (asset) {
-        console.log(asset);
 
         return imageTest.test(asset._id) && 
             asset.hasOwnProperty("post_id") &&
@@ -41,7 +71,7 @@ hexo.extend.generator.register("images", function (locals, render, next) {
                 destDir = path.dirname(asset.path);
 
             sizeKeys.forEach(function (size) {
-                var resizedName = generateFileName(fileName, size);
+                var resizedName = createPath(fileName, size);
 
                 tmpPaths[size] = path.join(tmpFolder, resizedName);
                 destPaths[size] = path.join(destDir, resizedName);
@@ -69,7 +99,7 @@ hexo.extend.generator.register("images", function (locals, render, next) {
                         imageSizes[size],
                         Math.floor(imageSizes[size] / aspectRatio),
                         image.tmp[size],
-                        40,
+                        60,
                         callback
                     );
                 }, callback);
